@@ -5,7 +5,7 @@
   runCommand,
   buildNpmPackage,
   clang,
-  dejavu-fonts-minimal,
+  dejavu_fonts,
   go_1_26,
   nodejs_24,
   patchelf,
@@ -30,8 +30,7 @@ let
     <?xml version="1.0"?>
     <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
     <fontconfig>
-      <dir>${dejavu-fonts-minimal}/share/fonts/truetype</dir>
-      <cachedir>/tmp/bitbox-fontconfig-cache</cachedir>
+      <dir>${dejavu_fonts}/share/fonts/truetype</dir>
     </fontconfig>
     EOF
   '';
