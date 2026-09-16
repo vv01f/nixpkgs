@@ -5,7 +5,9 @@
   runCommand,
   buildNpmPackage,
   clang,
+  dejavu-fonts-minimal,
   go_1_26,
+  nodejs_24,
   patchelf,
   qt5,
   qt6,
@@ -18,6 +20,20 @@ let
   rcc = runCommand "rcc" { } ''
     mkdir -p $out/bin
     cp ${lib.getExe' qt5.qtbase.dev "rcc"} $out/bin
+  '';
+
+  # prevent runtime errors on fonts
+  bitboxFontsConf = runCommand "bitbox-fontconfig" { } ''
+    mkdir -p $out
+
+    cat > $out/fonts.conf <<EOF
+    <?xml version="1.0"?>
+    <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+    <fontconfig>
+      <dir>${dejavu-fonts-minimal}/share/fonts/truetype</dir>
+      <cachedir>/tmp/bitbox-fontconfig-cache</cachedir>
+    </fontconfig>
+    EOF
   '';
 in
 stdenv.mkDerivation rec {
@@ -43,6 +59,8 @@ stdenv.mkDerivation rec {
     pname = "bitbox-web";
     inherit version src;
     sourceRoot = "${src.name}/frontends/web";
+    # BitBoxApp v4.52.0 requires Node >=24 <25.
+    nodejs = nodejs_24;
     npmDepsHash = "sha256-G8ZhBG9zdiFvkMVgjLFJcbFFpbqh6+q1xezv9fwwaAg=";
     installPhase = "cp -r build $out";
   };
@@ -73,23 +91,22 @@ stdenv.mkDerivation rec {
     cp frontends/qt/build/BitBox $out/bin/bitbox
     cp frontends/qt/build/assets.rcc $out/bin
     cp frontends/qt/server/libserver.so $out/lib
-    # BitBoxApp 4.52.0 uses the Breez Spark SDK native library.
     cp \
       vendor/github.com/breez/breez-sdk-spark-go/breez_sdk_spark/lib/linux-amd64/libbreez_sdk_spark_bindings.so \
       $out/lib/
+
     install -m 644 \
       -Dt $out/lib/udev/rules.d \
       ${./rules.d}/*
-    # libserver.so needs to find the bundled Breez Spark library.
-    # Keep the runtime dependency relative to libserver.so rather
-    # than referring to the Nix build directory.
     patchelf --set-rpath '$ORIGIN' \
       $out/lib/libserver.so
 
     runHook postInstall
   '';
 
-  buildInputs = [ qt6.qtwebengine ];
+  buildInputs = [
+    qt6.qtwebengine
+  ];
 
   nativeBuildInputs = [
     clang
@@ -98,6 +115,12 @@ stdenv.mkDerivation rec {
     qt6.wrapQtAppsHook
     rcc
     udevCheckHook
+  ];
+
+  qtWrapperArgs = [
+    "--set"
+    "FONTCONFIG_FILE"
+    "${bitboxFontsConf}/fonts.conf"
   ];
 
   doInstallCheck = true;
