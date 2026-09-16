@@ -5,7 +5,7 @@
   runCommand,
   buildNpmPackage,
   clang,
-  go,
+  go_1_26,
   patchelf,
   qt5,
   qt6,
@@ -93,7 +93,7 @@ stdenv.mkDerivation rec {
 
   nativeBuildInputs = [
     clang
-    go
+    go_1_26
     patchelf
     qt6.wrapQtAppsHook
     rcc
