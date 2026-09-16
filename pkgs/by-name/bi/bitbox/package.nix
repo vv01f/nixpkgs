@@ -6,6 +6,8 @@
   buildNpmPackage,
   clang,
   go,
+  nodejs_24,
+  patchelf,
   qt5,
   qt6,
   udevCheckHook,
@@ -21,30 +23,40 @@ let
 in
 stdenv.mkDerivation rec {
   pname = "bitbox";
-  version = "4.51.3";
+  version = "4.52.0";
 
   src = fetchFromGitHub {
     owner = "BitBoxSwiss";
     repo = "bitbox-wallet-app";
     tag = "v${version}";
     fetchSubmodules = true;
-    hash = "sha256-JdUoV4bp+pI8neyxHte1z7CULBwdNdLG/CaZFPmvDeg=";
+    hash = "sha256-urQjnrBcqTwP+xpcM0L8IpE/Vc+CQiN/2hE5jlBnzdU=";
   };
 
   postPatch = ''
-    substituteInPlace frontends/qt/resources/linux/usr/share/applications/bitbox.desktop \
-        --replace-fail 'Exec=BitBox %u' 'Exec=bitbox %u'
+    substituteInPlace \
+      frontends/qt/resources/linux/usr/share/applications/bitbox.desktop \
+      --replace-fail \
+        'Exec=BitBox %u' \
+        'Exec=bitbox %u'
   '';
 
   dontConfigure = true;
 
   passthru.web = buildNpmPackage {
     pname = "bitbox-web";
-    inherit version;
-    inherit src;
+    inherit version src;
+
     sourceRoot = "${src.name}/frontends/web";
-    npmDepsHash = "sha256-kIYyUeaTgj4dJXfAJ1+3WDIYSADFcs5ypRGTODlxwDI=";
-    installPhase = "cp -r build $out";
+
+    # BitBoxApp v4.52.0 requires Node >=24 <25.
+    nodejs = nodejs_24;
+
+    npmDepsHash = "sha256-G8ZhBG9zdiFvkMVgjLFJcbFFpbqh6+q1xezv9fwwaAg=";
+
+    installPhase = ''
+      cp -r build $out
+    '';
   };
 
   buildPhase = ''
@@ -66,22 +78,37 @@ stdenv.mkDerivation rec {
   installPhase = ''
     runHook preInstall
 
-    mkdir $out
+    mkdir -p $out
     cp -r frontends/qt/resources/linux/usr/share $out
-    mkdir $out/{bin,lib}
+    mkdir -p $out/bin
+    mkdir -p $out/lib
     cp frontends/qt/build/BitBox $out/bin/bitbox
     cp frontends/qt/build/assets.rcc $out/bin
     cp frontends/qt/server/libserver.so $out/lib
-    install -m 644 -Dt $out/lib/udev/rules.d ${./rules.d}/*
+    # BitBoxApp 4.52.0 uses the Breez Spark SDK native library.
+    cp \
+      vendor/github.com/breez/breez-sdk-spark-go/breez_sdk_spark/lib/linux-amd64/libbreez_sdk_spark_bindings.so \
+      $out/lib/
+    install -m 644 \
+      -Dt $out/lib/udev/rules.d \
+      ${./rules.d}/*
+    # libserver.so needs to find the bundled Breez Spark library.
+    # Keep the runtime dependency relative to libserver.so rather
+    # than referring to the Nix build directory.
+    patchelf --set-rpath '$ORIGIN' \
+      $out/lib/libserver.so
 
     runHook postInstall
   '';
 
-  buildInputs = [ qt6.qtwebengine ];
+  buildInputs = [
+    qt6.qtwebengine
+  ];
 
   nativeBuildInputs = [
     clang
-    go
+    go_1_26
+    patchelf
     qt6.wrapQtAppsHook
     rcc
     udevCheckHook
